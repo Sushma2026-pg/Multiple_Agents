@@ -1,0 +1,52 @@
+# Reflection Report: Multi-Agent Sales System
+
+## 1) Architecture and Workflow Reflection
+
+The system is designed as a coordinated multi-agent workflow with one orchestrator and four worker agents:
+
+- `Orchestrator`: controls end-to-end sequencing and composes the final customer response.
+- `RequestParserAgent`: extracts requested items and quantities from free text and maps them to canonical catalog names.
+- `InventoryAgent`: evaluates reorder feasibility when stock is low or below threshold, using cash and supplier lead-time tools.
+- `QuotingAgent`: fallback pricing agent used only when historical pricing is unavailable.
+- `SalesAgent`: records confirmed sales transactions and triggers an internal financial snapshot.
+
+The workflow implemented in code follows five ordered steps:
+
+1. Parse customer request into structured items.
+2. Check inventory and classify each item (`FULFILLABLE`, `REORDER INITIATED`, `CANNOT FULFILL`).
+3. Build quote data with Python pricing logic (historical price lookup + deterministic discount rules), with limited quoting-agent fallback.
+4. Process sale only when quote JSON contains positive-priced, positive-quantity items.
+5. Compose a customer-facing response from structured inventory and quote outputs, then sanitize output to avoid internal error/financial leakage.
+
+This architecture was chosen to keep high-variance language tasks (request parsing and fallback pricing) in worker agents while keeping business rules (status checks, pricing math, transaction gating, and response sanitization) controlled in code. The orchestrator delegates through registered tools via the framework planner instead of manually calling sub-agents inside `run()`, which aligns with the expected orchestration pattern.
+
+The workflow diagram file used for this architecture is `The Beaver's Choice Paper Company System Agent Architecture.png`.
+
+## 2) Evaluation Results and Strengths (from `test_results.csv`)
+
+From the latest `test_results.csv` run:
+
+- Evaluated requests in this run: **20**
+- Cash balance changes observed: **4**
+- Responses with explicit rationale markers (e.g., "because", "item not found", deadline/restock reason): **10**
+- Responses with internal error/diagnostic leakage markers: **0**
+
+Key strengths observed:
+
+- **Transparent customer messaging**: many responses now include itemized fields such as base price, discount percentage, discount rationale, and final total (for priced items).
+- **Clear non-fulfillment rationale**: unfulfillable items are often explained with concrete causes such as catalog mismatch or deadline-restock conflict.
+- **Safer output handling**: customer responses are sanitized to prevent internal parser errors and sensitive financial details from being exposed.
+- **Delegation-aligned orchestration**: orchestration is now tool-driven through the orchestrator agent, while worker agents remain specialized and independently testable.
+
+## 3) Improvement Suggestions
+
+1. **Customer Order Revision Workflow**
+   - Add a follow-up feature where customers can accept a partial quote, replace unavailable items with suggested alternatives, or adjust delivery deadlines in one reply. The system would then regenerate quote and fulfillment plans without starting from scratch.
+
+2. **Supplier Multi-Source Optimization**
+   - Add supplier profiles (lead times, minimum order quantities, pricing tiers, reliability scores) and let the inventory/sales flow choose the best supplier mix for reorder items. This would convert simple reorder checks into an optimization feature.
+
+3. **Customer Portal and Order Tracking**
+   - Add a lightweight customer-facing status API/dashboard that shows quote accepted/rejected state, reorder ETA milestones, shipment readiness, and change history per request.
+
+These features extend the system beyond baseline order handling and introduce product-level capabilities for real-world operations.

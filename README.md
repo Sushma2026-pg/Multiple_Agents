@@ -1,5 +1,3 @@
-# Multiple_Agents
-
 # Beaver's Choice Paper Company Sales System
 
 ## Overview
